@@ -2292,6 +2292,51 @@ impl Player {
         }
     }
 
+    /// Sets an AVM1 variable from the host, like the Flash ActiveX `SetVariable` method.
+    ///
+    /// The path is resolved from the root movie, so both `name` and `_level0.name` work.
+    /// Any `watch` callbacks on the variable run before this returns.
+    pub fn set_variable(&mut self, path: &str, value: &str) {
+        self.mutate_with_update_context(|context| {
+            let Some(root) = context.stage.root_clip() else {
+                return;
+            };
+            let mut activation = Activation::from_nothing(
+                context,
+                ActivationIdentifier::root("[SetVariable]"),
+                root,
+            );
+            let path = AvmString::new_utf8(activation.gc(), path);
+            let value = AvmString::new_utf8(activation.gc(), value);
+            if let Err(e) = activation.set_variable(path, value.into()) {
+                tracing::error!("SetVariable failed: {e}");
+            }
+        });
+    }
+
+    /// Reads an AVM1 variable as a string, like the Flash ActiveX `GetVariable` method.
+    ///
+    /// Returns `None` when the variable is `undefined`.
+    pub fn get_variable(&mut self, path: &str) -> Option<String> {
+        self.mutate_with_update_context(|context| {
+            let root = context.stage.root_clip()?;
+            let mut activation = Activation::from_nothing(
+                context,
+                ActivationIdentifier::root("[GetVariable]"),
+                root,
+            );
+            let path = AvmString::new_utf8(activation.gc(), path);
+            let value: Value<'_> = activation.get_variable(path).ok()?.into();
+            if value == Value::Undefined {
+                return None;
+            }
+            value
+                .coerce_to_string(&mut activation)
+                .ok()
+                .map(|s| s.to_string())
+        })
+    }
+
     /// Runs the closure `f` with an `UpdateContext`.
     /// This takes cares of populating the `UpdateContext` struct, avoiding borrow issues.
     pub fn mutate_with_update_context<F, R>(&mut self, f: F) -> R
