@@ -342,6 +342,16 @@ impl<'gc> Callback<'gc> {
 
 pub trait FsCommandProvider {
     fn on_fs_command(&self, command: &str, args: &str) -> bool;
+
+    /// Variables the host wants set before the `fscommand` call returns to ActionScript,
+    /// as `(path, value)` pairs.
+    ///
+    /// This mirrors the Flash ActiveX control, where a container may call `SetVariable`
+    /// from inside its `FSCommand` event handler and the change (including any `watch`
+    /// callbacks it triggers) is visible to the very next ActionScript statement.
+    fn take_variables(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
 }
 
 pub struct NullFsCommandProvider;
@@ -422,5 +432,9 @@ impl<'gc> ExternalInterface<'gc> {
 
     pub fn invoke_fs_command(&self, command: &str, args: &str) -> bool {
         self.fs_commands.on_fs_command(command, args)
+    }
+
+    pub fn take_fs_command_variables(&self) -> Vec<(String, String)> {
+        self.fs_commands.take_variables()
     }
 }

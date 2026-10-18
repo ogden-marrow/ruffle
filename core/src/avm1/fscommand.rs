@@ -3,7 +3,8 @@
 use crate::avm_warn;
 use crate::avm1::activation::Activation;
 use crate::avm1::error::Error;
-use crate::string::WStr;
+use crate::avm1::Value;
+use crate::string::{AvmString, WStr};
 
 /// Parse an FSCommand URL.
 pub fn parse(url: &WStr) -> Option<&WStr> {
@@ -34,6 +35,17 @@ pub fn handle<'gc>(
         .invoke_fs_command(&command, &args)
     {
         avm_warn!(activation, "Unhandled FSCommand: {}", command);
+    }
+
+    // Apply any `SetVariable` calls the host made while handling the command.
+    let variables = activation
+        .context
+        .external_interface
+        .take_fs_command_variables();
+    for (path, value) in variables {
+        let path = AvmString::new_utf8(activation.gc(), path);
+        let value = Value::from(AvmString::new_utf8(activation.gc(), value));
+        activation.set_variable(path, value)?;
     }
     Ok(())
 }
